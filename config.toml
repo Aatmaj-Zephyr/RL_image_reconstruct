@@ -1,8 +1,11 @@
 [default]
 DEBUG_LOG_FILE_PATH="./debug_logs/main.log"
 MODEL_SAVE_PATH = "./models/"
-SAVE_AFTER_INTERVAL = 10000
+CHECKPOINT_INTERVAL = 10000
+IMG_SAVE_PATH = "./outputs/imgs/"
 DEVICE = "mps"
+ROLLOUT_INTERVAL = 100
+
 
 [debug]
 IS_DEBUG = true
