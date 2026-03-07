@@ -1,0 +1,12 @@
+*raw
+*.pt
+*.mp4
+*.gz
+*.pth
+*.pt
+*.meta
+data_*
+*_batch*
+.trunk
+venv
+old_outputs

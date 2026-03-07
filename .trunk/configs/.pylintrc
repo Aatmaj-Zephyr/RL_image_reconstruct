@@ -1,0 +1,13 @@
+[DESIGN]
+# Maximum number of statements in function / method body
+max-statements=21
+# for mathematical notation
+good-names=i,j,k,x,y,A,B,C,D,E,F,G,H,I,J,K,L,M,N,O,P,Q,R,S,T,U,V,W,X,Y,Z,𝜶,β,μ,𝝈,_
+# Maximum number of branch for function / method body
+max-branches=2
+
+[FORMAT]
+# we use large monitors! press control b for hiding side menu
+max-line-length = 150
+
+disable=no-member, E0401, C0303, C0305, C2401, C0103

@@ -1,0 +1,15 @@
+[default]
+DEBUG_LOG_FILE_PATH="./debug_logs/main.log"
+MODEL_SAVE_PATH = "./models/"
+SAVE_AFTER_INTERVAL = 10000
+DEVICE = "mps"
+
+[debug]
+IS_DEBUG = true
+IS_DEBUG_TORCH = true
+TELEMETRY_INTERVAL = 100
+
+[prod]
+IS_DEBUG = false
+IS_DEBUG_TORCH = false
+TELEMETRY_INTERVAL = 1000
