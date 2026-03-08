@@ -18,4 +18,4 @@ echo "Starting servers..."
 ./run_scripts/server.sh >> debug_logs/server.log &
 
 echo "Running main.py in production mode"
-python main.py --mode prod
+python -O main.py --mode prod

@@ -10,3 +10,5 @@ data_*
 .trunk
 venv
 old_outputs
+debug_logs
+*.pyc
