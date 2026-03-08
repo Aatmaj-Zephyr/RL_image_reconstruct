@@ -3,6 +3,7 @@ echo "Getting permissions"
 chmod +x setup/create_venv.sh
 chmod +x run_scripts/debug.sh
 chmod +x run_scripts/build.sh
+chmod +x run_scripts/server.sh
 
 echo "Creating virtual env"
 

@@ -35,7 +35,7 @@ class TelemetryWriter:
         self.file = open(self.filepath, "a", newline="", encoding="utf-8")
         self.writer = csv.DictWriter(
             self.file,
-            fieldnames=["timestamp"] + fieldnames
+            fieldnames=["timestamp"] + ["runtime"] + fieldnames
         )
 
         if not file_exists:
@@ -47,6 +47,8 @@ class TelemetryWriter:
         """
         assert self.writer is not None, "TelemetryWriter not initialized. Call setup_writer first."
         metrics["timestamp"] = time.time()
+        # add a formatted runtime metric to the logged metrics for better tracking of how long the training has been running
+        metrics["runtime"] = time.time()- config.runtime.START_TIME 
         self.writer.writerow(metrics)
         self.file.flush()
 

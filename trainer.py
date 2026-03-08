@@ -195,7 +195,7 @@ def render(episode_id: int, gt_mask: torch.Tensor, pred_mask: torch.Tensor, show
     plt.imshow(canvas)
     plt.title(f"Episode {episode_id} | IoU: {reward:.3f}")
     plt.axis("off")
-    fig_name = f"episode_{episode_id:07d}.png"
+    fig_name = f"{config.runtime.RUN_ID}_episode_{episode_id:07d}.png"
     os.makedirs(config.IMG_SAVE_PATH, exist_ok=True)
     save_path = os.path.join(config.IMG_SAVE_PATH, fig_name)
     plt.savefig(save_path, bbox_inches="tight", pad_inches=0)
@@ -354,13 +354,10 @@ def train() -> None:
         if episode % config.TELEMETRY_INTERVAL == 0:
             telemetry_writer.log(
                 episode=episode,
-                total_rewards=rewards.mean().item(),
                 moving_avg_reward=(
-                    sum(moving_avgs_rewards_list) / len(moving_avgs_rewards_list)),
+                    sum(moving_avgs_rewards_list) / len(moving_avgs_rewards_list)), temperature=T
             )
         if episode % config.ROLLOUT_INTERVAL == 0:
             rollout_and_render(episode, gt_params[0], policy_network)
         if episode % config.CHECKPOINT_INTERVAL == 0:
             save_model(episode_index=episode, policy_network=policy_network)
-
- 
