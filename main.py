@@ -22,7 +22,7 @@ if __name__ == "__main__":
 
     setup_logger()
     telemetry_writer.setup_writer(
-        fieldnames=["episode", "moving_avg_reward",
+        fieldnames=["episode", "mean_reward",
                     "temperature"]  # modify this as needed
     )
     log.info(

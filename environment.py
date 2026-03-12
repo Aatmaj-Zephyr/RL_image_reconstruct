@@ -81,6 +81,8 @@ class ShapeDrawEnv(gym.Env):
         Returns:
             torch.Tensor: (H, W) combined binary mask for all circles
         """
+        circle_parameters = torch.tensor(circle_parameters, device="cpu")
+
         size = hyperparams.IMG_SIZE
         mask = torch.zeros((size, size),
                            device=hyperparams.DEVICE)
@@ -112,7 +114,6 @@ class ShapeDrawEnv(gym.Env):
         Returns:
             torch.Tensor: (size, size) circle mask
         """
-
         # scale coordinates
         center_x, center_y, radius = self._normalize_circle_coordinates(
             x, y, r)
@@ -140,7 +141,7 @@ class ShapeDrawEnv(gym.Env):
         """
         MIN_RADIUS = 10
         size = hyperparams.IMG_SIZE
-        center_x = x * size * (3 / 5) + size / 5
-        center_y = y * size * (3 / 5) + size / 5
-        radius = r * 40 + MIN_RADIUS
+        center_x = x * size * (1 / 3) + size / 3
+        center_y = y * size * (1 / 3) + size / 3
+        radius = r * 20 + MIN_RADIUS
         return center_x, center_y, radius
