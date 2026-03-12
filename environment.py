@@ -81,7 +81,6 @@ class ShapeDrawEnv(gym.Env):
         Returns:
             torch.Tensor: (H, W) combined binary mask for all circles
         """
-        circle_parameters = torch.tensor(circle_parameters, device="cpu")
 
         size = hyperparams.IMG_SIZE
         mask = torch.zeros((size, size),
