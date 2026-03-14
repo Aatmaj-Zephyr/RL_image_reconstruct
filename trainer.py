@@ -170,6 +170,8 @@ def make_env() -> gym.Env:
 # trunk-ignore(pylint/R0914)
 def train() -> None:
     """Train the model."""
+    torch.mps.empty_cache()
+
     if config.IS_DEBUG_TORCH:
         # Note: If using DDP with torch.multiprocessing.spawn, anomaly detection must
         # be enabled inside each worker process, not only in the main file.
@@ -224,7 +226,6 @@ def train() -> None:
         loss.backward()
         # torch.nn.utils.clip_grad_norm_(
         #     policy_network.parameters(), max_norm=1.0)
-
         optimizer.step()
 
         if episode % hyperparams.TEMP_UPDATE_INTERVAL == 0:

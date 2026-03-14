@@ -20,8 +20,8 @@ class ShapeDrawEnv(gym.Env):
             low=0, high=1, shape=(hyperparams.IMG_SIZE, hyperparams
                                   .IMG_SIZE), dtype=np.float32)
         self.MESHGRID = torch.meshgrid(
-            torch.arange(hyperparams.IMG_SIZE, device=hyperparams.DEVICE),
-            torch.arange(hyperparams.IMG_SIZE, device=hyperparams.DEVICE),
+            torch.arange(hyperparams.IMG_SIZE),
+            torch.arange(hyperparams.IMG_SIZE),
             indexing="ij",
         )  # meshgrid for geometry calculations
 
@@ -38,7 +38,7 @@ class ShapeDrawEnv(gym.Env):
         super().reset(seed=seed)
         self.gt_params = self._sample_environment_params()
         self.gt_mask = self._create_shape_masks(
-            self.gt_params.to(hyperparams.DEVICE))
+            self.gt_params)
         info = {
             "gt_params": self.gt_params.cpu()
         }
@@ -70,38 +70,105 @@ class ShapeDrawEnv(gym.Env):
         return reward.item()
 
     def _sample_environment_params(self) -> torch.Tensor:
-        """Sample random circle parameters for the environment."""
+        """Sample random shape parameters for the environment."""
         circles = [torch.rand(3) for _ in range(hyperparams.NUM_CIRCLES)]
-        return torch.cat(circles)
+        triangles= [torch.rand(6) for _ in range(hyperparams.NUM_TRIANGLES)]
+        shapes = circles + triangles
+        sampled_params = torch.cat(shapes)
+        log.debug(f"Sampled environment parameters: {sampled_params}")
+        return sampled_params
 
-    def _create_shape_masks(self, circle_parameters: torch.Tensor) -> torch.Tensor:
-        """Create a combined mask for multiple circles given their parameters.
+    def _create_shape_masks(self, shape_parameters: torch.Tensor) -> torch.Tensor:
+        """Create a combined mask for multiple shapes given their parameters.
         Args:
-            circle_parameters (torch.Tensor): (3*num_circles) tensor of circle parameters
+            shape_parameters (torch.Tensor): (3*num_shapes) tensor of shape parameters
         Returns:
-            torch.Tensor: (H, W) combined binary mask for all circles
+            torch.Tensor: (H, W) combined binary mask for all shapes
         """
+        log.debug(f"Creating shape masks from parameters: {shape_parameters}")
+        assert shape_parameters.shape[0] == hyperparams.NUM_CIRCLES * 3 + hyperparams.NUM_TRIANGLES * 6, f"Expected shape parameters of length \
+            {hyperparams.NUM_CIRCLES * 3 + hyperparams.NUM_TRIANGLES * 6}, got {shape_parameters.shape[0]}"
+        circle_params = shape_parameters[:3*hyperparams.NUM_CIRCLES]
+        triangle_params = shape_parameters[3*hyperparams.NUM_CIRCLES:3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES]
+        log.debug(f"Separated circle parameters: {circle_params}, triangle parameters: {triangle_params}")
 
         size = hyperparams.IMG_SIZE
-        mask = torch.zeros((size, size),
-                           device=hyperparams.DEVICE)
+        mask = torch.zeros((size, size))
 
         for circle_idx in range(hyperparams.NUM_CIRCLES):
             base_idx = 3 * circle_idx
             circle_mask = self._create_circle_mask(
-                circle_parameters[base_idx],
-                circle_parameters[base_idx + 1],
-                circle_parameters[base_idx + 2]
+                circle_params[base_idx],
+                circle_params[base_idx + 1],
+                circle_params[base_idx + 2]
             )
             # overlap the masks by taking the maximum value (union)
             mask = torch.maximum(mask, circle_mask)
+        for triangle_idx in range(hyperparams.NUM_TRIANGLES):
+            base_idx = 6 * triangle_idx
+            triangle_mask = self._create_triangle_mask(triangle_params[base_idx:base_idx+6])
+            mask = torch.maximum(mask, triangle_mask)
 
-        log.debug(
-            f"Multi-circle mask created with {hyperparams.NUM_CIRCLES} circles each.")
         log.debug(
             f"Mask has shape {mask.shape} with values in range [{mask.min().item()}, {mask.max().item()}]")
         assert mask.sum() > 0, "Generated mask is empty. Check circle parameters and mask creation logic."
         return mask
+
+    def _create_triangle_mask(self, triangle_params:torch.Tensor) -> torch.Tensor:
+        """Create a binary mask of a triangle.
+        Args:
+            triangle_params torch.Tensor:  List of vertex coordinate tensors [(x1, y1), (x2, y2), (x3, y3)]
+        Returns:
+            torch.Tensor: (size, size) triangle mask
+        """
+        # scale coordinates
+        vertices = self._normalize_triangle_coordinates(triangle_params)
+
+        # coordinate grid
+        y_coords, x_coords = self.MESHGRID
+
+        # Compute edge vectors
+        v0 = vertices[1] - vertices[0]
+        v1 = vertices[2] - vertices[0]
+        v2 = torch.stack((x_coords - vertices[0, 0], y_coords - vertices[0, 1]), dim=-1)
+        # Compute dot products
+        dot00 = (v0 * v0).sum(dim=-1)
+        dot01 = (v0 * v1).sum(dim=-1)
+        dot02 = (v0 * v2).sum(dim=-1)
+        dot11 = (v1 * v1).sum(dim=-1)
+        dot12 = (v1 * v2).sum(dim=-1)
+
+        # Compute barycentric coordinates
+        inv_denom = 1 / (dot00 * dot11 - dot01 * dot01 + 1e-6)
+        u = (dot11 * dot02 - dot01 * dot12) * inv_denom
+        v = (dot00 * dot12 - dot01 * dot02) * inv_denom
+        # Create binary mask where u >= 0, v >= 0, and u + v < 1
+        mask = ((u >= 0) & (v >= 0) & (u + v < 1)).float()
+
+
+        log.debug(
+            f"Triangle mask created with vertices {vertices} and shape {mask.shape}")
+        return mask
+
+    def _normalize_triangle_coordinates(self,triangle_params:torch.Tensor) -> torch.Tensor:
+        """Normalize triangle vertex coordinates from [0,1] to actual pixel coordinates.
+        Args:
+            triangle_params torch.Tensor: Tensor of vertex coordinate tensors [(x1, y1), (x2, y2), (x3, y3)]
+        Returns:
+            torch.Tensor: Tensor of vertex coordinate tensors [(x1, y1), (x2, y2), (x3, y3)]
+        """
+        log.debug(f"Normalizing triangle parameters: {triangle_params}")
+        size = hyperparams.IMG_SIZE
+        extent = size * (1 / 3)
+        x1, y1 = triangle_params[0], triangle_params[1]
+        x2, y2 = triangle_params[2], triangle_params[3]
+        x3, y3 = triangle_params[4], triangle_params[5]
+        vertices = torch.tensor([[extent+(x1 * extent), (y1 * extent)],
+                                 [extent+(x2 * extent), (y2 * extent)],
+                                 [extent+(x3 * extent), (y3 * extent)]])
+
+        log.debug(f"Normalized triangle vertices: {vertices}")
+        return vertices
 
     def _create_circle_mask(self, x: torch.Tensor, y: torch.Tensor, r: torch.Tensor) -> torch.Tensor:
         """Create a binary mask of a circle.

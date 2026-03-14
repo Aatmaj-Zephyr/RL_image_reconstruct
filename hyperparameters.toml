@@ -11,8 +11,8 @@ WEIGHT_DECAY_ADAM = 0
 
 # Model
 IMG_SIZE = 256
-NUM_CIRCLES = 3
-
+NUM_CIRCLES = 1
+NUM_TRIANGLES = 1
 # Device
 DEVICE = "mps"
 
