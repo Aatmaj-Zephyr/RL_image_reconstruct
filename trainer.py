@@ -217,7 +217,7 @@ def train() -> None:
             rewards, dtype=torch.float32, device=hyperparams.DEVICE)
         baseline = rewards.mean()
         advantage = rewards - baseline
-      
+
         loss = -(log_prob * advantage.detach()).mean()
 
         optimizer.zero_grad()
