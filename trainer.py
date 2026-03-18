@@ -1,5 +1,6 @@
 """Training code goes here."""
 
+
 import os
 import matplotlib.pyplot as plt
 import torch
@@ -205,22 +206,23 @@ def train() -> None:
 
         gt_mask = torch.tensor(
             gt_mask, dtype=torch.float32, device=hyperparams.DEVICE)
-        image = gt_mask.unsqueeze(1).repeat(1, 3, 1, 1)
-        log.debug(f"Episode {episode} | Image shape: {image.shape}")
-        mean = policy_network(image)
-        std = torch.full_like(mean, T)
-        dist = D.Normal(mean, std)
-        raw_action = dist.sample()
-        log_prob = dist.log_prob(raw_action).sum(dim=1)
-        action = torch.clamp(raw_action, 0, 1)
-        _, rewards, _, _, _ = envs.step(action.cpu().numpy())
+        image_orig = gt_mask.unsqueeze(1).repeat(1, 3, 1, 1)
+        log.debug(f"Episode {episode} | Image shape: {image_orig.shape}")
+        mean_orig = policy_network(image_orig)
+        std_orig = torch.full_like(mean_orig, T)
+        dist_orig = D.Normal(mean_orig, std_orig)
+        raw_action_orig = dist_orig.sample()
+        log_prob_orig = dist_orig.log_prob(raw_action_orig).sum(dim=1)
+        action_orig = torch.clamp(raw_action_orig, 0, 1)
+        pred_masks, rewards_orig, _, _, _ = envs.step(
+            action_orig.cpu().numpy())
 
-        rewards = torch.tensor(
-            rewards, dtype=torch.float32, device=hyperparams.DEVICE)
-        baseline = rewards.mean()
-        advantage = rewards - baseline
+        rewards_orig = torch.tensor(
+            rewards_orig, dtype=torch.float32, device=hyperparams.DEVICE)
+        baseline = rewards_orig.mean()
+        advantage = rewards_orig - baseline
 
-        loss = -(log_prob * advantage.detach()).mean()
+        loss = -(log_prob_orig * advantage.detach()).mean()
 
         optimizer.zero_grad()
         loss.backward()
@@ -228,6 +230,29 @@ def train() -> None:
         #     policy_network.parameters(), max_norm=1.0)
         optimizer.step()
 
+        # hindsight replay
+        pred_masks = torch.tensor(
+            pred_masks, dtype=torch.float32, device=hyperparams.DEVICE
+        )
+        log.debug(f"Episode {episode} | Pred mask shape: {pred_masks.shape}")
+        image_hreplay = pred_masks.unsqueeze(1).repeat(1, 3, 1, 1)
+        log.debug(f"Episode {episode} | Image shape: {image_hreplay.shape}")
+        mean_hreplay = policy_network(image_hreplay)
+        std_hreplay = torch.full_like(mean_hreplay, T)
+        dist_hreplay = D.Normal(mean_hreplay, std_hreplay)
+
+        log_prob_hreplay = dist_hreplay.log_prob(raw_action_orig).sum(dim=1) # Evaluate ORIGINAL action under new goal
+
+
+        rewards_hreplay = torch.ones_like(
+            rewards_orig, dtype=torch.float32, device=hyperparams.DEVICE)
+        importance_weight = torch.exp(log_prob_hreplay - log_prob_orig)
+
+        loss = -(log_prob_hreplay).mean()
+        optimizer.zero_grad()
+        loss.backward()
+
+        optimizer.step()
         if episode % hyperparams.TEMP_UPDATE_INTERVAL == 0:
             T = max(T * hyperparams.TEMP_DECAY, hyperparams.TEMP_MIN)
 

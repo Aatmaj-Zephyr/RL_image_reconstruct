@@ -37,7 +37,7 @@ class ShapeDrawEnv(gym.Env):
         """
         super().reset(seed=seed)
         self.gt_params = self._sample_environment_params()
-        self.gt_mask = self._create_shape_masks(
+        self.gt_mask = self.create_shape_masks(
             self.gt_params)
         info = {
             "gt_params": self.gt_params.cpu()
@@ -46,12 +46,12 @@ class ShapeDrawEnv(gym.Env):
 
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool, dict]:
         """Take an action and return the predicted mask, reward, done flag, and info."""
-        pred_mask = self._create_shape_masks(action)
+        pred_mask = self.create_shape_masks(action)
         # Compute reward (IoU) for display
-        reward = self._compute_reward(pred_mask, self.gt_mask)
+        reward = self.compute_reward(pred_mask, self.gt_mask)
         return pred_mask.cpu(), reward, False, False, {}
 
-    def _compute_reward(self, pred_mask: torch.Tensor, gt_mask: torch.Tensor) -> float:
+    def compute_reward(self, pred_mask: torch.Tensor, gt_mask: torch.Tensor) -> float:
         """Compute IoU reward for a single predicted and ground truth masks.
         Args:
             pred_mask (torch.Tensor): (H, W) predicted binary masks
@@ -78,7 +78,7 @@ class ShapeDrawEnv(gym.Env):
         log.debug(f"Sampled environment parameters: {sampled_params}")
         return sampled_params
 
-    def _create_shape_masks(self, shape_parameters: torch.Tensor) -> torch.Tensor:
+    def create_shape_masks(self, shape_parameters: torch.Tensor) -> torch.Tensor:
         """Create a combined mask for multiple shapes given their parameters.
         Args:
             shape_parameters (torch.Tensor): (3*num_shapes) tensor of shape parameters
