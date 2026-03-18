@@ -163,9 +163,26 @@ class ShapeDrawEnv(gym.Env):
         x1, y1 = triangle_params[0], triangle_params[1]
         x2, y2 = triangle_params[2], triangle_params[3]
         x3, y3 = triangle_params[4], triangle_params[5]
-        vertices = torch.tensor([[extent+(x1 * extent), (y1 * extent)],
-                                 [extent+(x2 * extent), (y2 * extent)],
-                                 [extent+(x3 * extent), (y3 * extent)]])
+
+        vertices = torch.tensor([
+            [x1, y1],
+            [x2, y2],
+            [x3, y3]
+        ])
+
+        # compute centroid
+        centroid = vertices.mean(dim=0)
+
+        scale = hyperparams.TRIANGLE_SCALE  # increase to enlarge triangle
+
+        # push vertices away from centroid
+        vertices = centroid + scale * (vertices - centroid)
+
+        # map to canvas
+        vertices = torch.stack([
+            extent + vertices[:,0] * extent,
+            extent + vertices[:,1] * extent
+        ], dim=1)
 
         log.debug(f"Normalized triangle vertices: {vertices}")
         return vertices

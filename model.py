@@ -21,14 +21,14 @@ class REINFORCE(nn.Module):
             nn.ReLU(),
             nn.Conv2d(16, 16, 3, padding=1, stride=2),
             nn.ReLU(),
-            nn.Conv2d(16, 16, 3, padding=1, stride=2),
+            nn.Conv2d(16, 16, 3, padding=1),
             nn.ReLU(),
             nn.Flatten()
         )
 
-        self.fc1 = nn.Linear(16 * 8 * 8, 128)
-        self.fc2 = nn.Linear(128, 64)
-        self.policy = nn.Linear(64, 3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES)  # output layer for circle and triangle parameters
+        self.fc1 = nn.Linear(16 * 16 * 16, 1024)
+        self.fc2 = nn.Linear(1024, 512)
+        self.policy = nn.Linear(512, 3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES)  # output layer for circle and triangle parameters
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model.
