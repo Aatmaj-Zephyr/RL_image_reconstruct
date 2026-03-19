@@ -159,7 +159,6 @@ class ShapeDrawEnv(gym.Env):
         """
         log.debug(f"Normalizing triangle parameters: {triangle_params}")
         size = hyperparams.IMG_SIZE
-        extent = size * (1 / 3)
         x1, y1 = triangle_params[0], triangle_params[1]
         x2, y2 = triangle_params[2], triangle_params[3]
         x3, y3 = triangle_params[4], triangle_params[5]
@@ -178,10 +177,13 @@ class ShapeDrawEnv(gym.Env):
         # push vertices away from centroid
         vertices = centroid + scale * (vertices - centroid)
 
+        # we want the shapes to look good
+        extent = size * hyperparams.TRIANGLE_EXTENT
+        margin = size * hyperparams.TRIANGLE_MARGIN
         # map to canvas
         vertices = torch.stack([
-            extent + vertices[:,0] * extent,
-            extent + vertices[:,1] * extent
+            margin + vertices[:,0] * extent,
+            margin + vertices[:,1] * extent
         ], dim=1)
 
         log.debug(f"Normalized triangle vertices: {vertices}")
@@ -224,7 +226,10 @@ class ShapeDrawEnv(gym.Env):
         """
         MIN_RADIUS = 10
         size = hyperparams.IMG_SIZE
-        center_x = x * size * (1 / 3) + size / 3
-        center_y = y * size * (1 / 3) + size / 3
-        radius = r * 20 + MIN_RADIUS
+        # we want the shapes to look good
+        extent = size * hyperparams.CIRCLE_EXTENT
+        margin = size * hyperparams.CIRCLE_MARGIN
+        center_x = x * extent + margin
+        center_y = y * extent + margin
+        radius = r * 25 + MIN_RADIUS
         return center_x, center_y, radius
