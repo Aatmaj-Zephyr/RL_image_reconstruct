@@ -243,11 +243,6 @@ def train() -> None:
 
         log_prob_hreplay = dist_hreplay.log_prob(raw_action_orig).sum(dim=1) # Evaluate ORIGINAL action under new goal
 
-
-        rewards_hreplay = torch.ones_like(
-            rewards_orig, dtype=torch.float32, device=hyperparams.DEVICE)
-        importance_weight = torch.exp(log_prob_hreplay - log_prob_orig)
-
         loss = -(log_prob_hreplay).mean()
         optimizer.zero_grad()
         loss.backward()
