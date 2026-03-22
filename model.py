@@ -30,14 +30,14 @@ class REINFORCE(nn.Module):
 
         self.fc1 = nn.Linear(64 * 8 * 8, 1024)
         self.fc2 = nn.Linear(1024, 512)
-        self.policy = nn.Linear(512, 3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES)  # output layer for circle and triangle parameters
+        self.policy = nn.Linear(512, 3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES+5*hyperparams.NUM_RECTANGLES)  # output layer for circle and triangle parameters
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass of the model.
         Args:
             x: The input image tensor of shape (batch_size, 1, img_size, img_size).
         Returns:
-            A tensor of shape (batch_size, 3 * num_circles + 6 * num_triangles) containing the predicted parameters for each circle and triangle.
+            A tensor of shape (batch_size, 3 * num_circles + 6 * num_triangles + 5 * num_rectangles) containing the predicted parameters for each circle, triangle, and rectangle.
         """
         x = self.encoder(x)
         x = F.gelu(self.fc1(x))

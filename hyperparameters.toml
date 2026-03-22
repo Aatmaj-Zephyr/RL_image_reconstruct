@@ -12,6 +12,11 @@ CIRCLE_MARGIN = 0.25 # margin left on the left side
 TRIANGLE_EXTENT = 0.5 # extent of the coordinates
 TRIANGLE_MARGIN = 0.25 # margin left on the left side
 
+RECTANGLE_EXTENT = 0.4 # extent of the coordinates
+RECTANGLE_MARGIN = 0.3 # margin left on the left side
+
+RECTANGLE_MIN_SIZE = 0.05
+RECTANGLE_MAX_SIZE = 0.3
 
 # Optimization
 LEARNING_RATE = 1e-4
@@ -19,8 +24,9 @@ WEIGHT_DECAY_ADAM = 0
 
 # Model
 IMG_SIZE = 256
-NUM_CIRCLES = 3
-NUM_TRIANGLES = 2
+NUM_CIRCLES = 1
+NUM_TRIANGLES = 1
+NUM_RECTANGLES = 1
 TRIANGLE_SCALE = 2
 # Device
 DEVICE = "mps"

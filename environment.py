@@ -1,4 +1,5 @@
 """Environment for the RL agent."""
+
 import numpy as np
 import torch
 import gymnasium as gym
@@ -15,7 +16,7 @@ class ShapeDrawEnv(gym.Env):
         """
         super().__init__()
         self.action_space = spaces.Box(low=0, high=1, shape=(
-            3 * hyperparams.NUM_CIRCLES,), dtype=np.float32)
+            3 * hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES+5*hyperparams.NUM_RECTANGLES,), dtype=np.float32)
         self.observation_space = spaces.Box(
             low=0, high=1, shape=(hyperparams.IMG_SIZE, hyperparams
                                   .IMG_SIZE), dtype=np.float32)
@@ -72,8 +73,9 @@ class ShapeDrawEnv(gym.Env):
     def _sample_environment_params(self) -> torch.Tensor:
         """Sample random shape parameters for the environment."""
         circles = [torch.rand(3) for _ in range(hyperparams.NUM_CIRCLES)]
-        triangles= [torch.rand(6) for _ in range(hyperparams.NUM_TRIANGLES)]
-        shapes = circles + triangles
+        triangles = [torch.rand(6) for _ in range(hyperparams.NUM_TRIANGLES)]
+        rectangles = [torch.rand(5) for _ in range(hyperparams.NUM_RECTANGLES)]
+        shapes = circles + triangles + rectangles
         sampled_params = torch.cat(shapes)
         log.debug(f"Sampled environment parameters: {sampled_params}")
         return sampled_params
@@ -86,11 +88,15 @@ class ShapeDrawEnv(gym.Env):
             torch.Tensor: (H, W) combined binary mask for all shapes
         """
         log.debug(f"Creating shape masks from parameters: {shape_parameters}")
-        assert shape_parameters.shape[0] == hyperparams.NUM_CIRCLES * 3 + hyperparams.NUM_TRIANGLES * 6, f"Expected shape parameters of length \
-            {hyperparams.NUM_CIRCLES * 3 + hyperparams.NUM_TRIANGLES * 6}, got {shape_parameters.shape[0]}"
+        assert shape_parameters.shape[0] == hyperparams.NUM_CIRCLES * 3 + hyperparams.NUM_TRIANGLES * 6 + hyperparams.NUM_RECTANGLES * 5, f"Expected \
+        shape parameters of length {hyperparams.NUM_CIRCLES * 3 + hyperparams.NUM_TRIANGLES * 6 + hyperparams.NUM_RECTANGLES * 5}, got {shape_parameters.shape[0]}"
         circle_params = shape_parameters[:3*hyperparams.NUM_CIRCLES]
-        triangle_params = shape_parameters[3*hyperparams.NUM_CIRCLES:3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES]
-        log.debug(f"Separated circle parameters: {circle_params}, triangle parameters: {triangle_params}")
+        triangle_params = shape_parameters[3*hyperparams.NUM_CIRCLES:3 *
+                                           hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES]
+        rectangle_params = shape_parameters[3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES:
+                                            3*hyperparams.NUM_CIRCLES+6*hyperparams.NUM_TRIANGLES+5*hyperparams.NUM_RECTANGLES]
+        log.debug(
+            f"Separated circle parameters: {circle_params}, triangle parameters: {triangle_params}")
 
         size = hyperparams.IMG_SIZE
         mask = torch.zeros((size, size))
@@ -106,15 +112,26 @@ class ShapeDrawEnv(gym.Env):
             mask = torch.maximum(mask, circle_mask)
         for triangle_idx in range(hyperparams.NUM_TRIANGLES):
             base_idx = 6 * triangle_idx
-            triangle_mask = self._create_triangle_mask(triangle_params[base_idx:base_idx+6])
+            triangle_mask = self._create_triangle_mask(
+                triangle_params[base_idx:base_idx+6])
             mask = torch.maximum(mask, triangle_mask)
+        for rectangle_idx in range(hyperparams.NUM_RECTANGLES):
+            base_idx = 5 * rectangle_idx
+            rectangle_mask = self._create_rectangle_mask(
+                rectangle_params[base_idx],
+                rectangle_params[base_idx + 1],
+                rectangle_params[base_idx + 2],
+                rectangle_params[base_idx + 3],
+                rectangle_params[base_idx + 4]
+            )
+            mask = torch.maximum(mask, rectangle_mask)
 
         log.debug(
             f"Mask has shape {mask.shape} with values in range [{mask.min().item()}, {mask.max().item()}]")
         assert mask.sum() > 0, "Generated mask is empty. Check circle parameters and mask creation logic."
         return mask
 
-    def _create_triangle_mask(self, triangle_params:torch.Tensor) -> torch.Tensor:
+    def _create_triangle_mask(self, triangle_params: torch.Tensor) -> torch.Tensor:
         """Create a binary mask of a triangle.
         Args:
             triangle_params torch.Tensor:  List of vertex coordinate tensors [(x1, y1), (x2, y2), (x3, y3)]
@@ -130,7 +147,8 @@ class ShapeDrawEnv(gym.Env):
         # Compute edge vectors
         v0 = vertices[1] - vertices[0]
         v1 = vertices[2] - vertices[0]
-        v2 = torch.stack((x_coords - vertices[0, 0], y_coords - vertices[0, 1]), dim=-1)
+        v2 = torch.stack(
+            (x_coords - vertices[0, 0], y_coords - vertices[0, 1]), dim=-1)
         # Compute dot products
         dot00 = (v0 * v0).sum(dim=-1)
         dot01 = (v0 * v1).sum(dim=-1)
@@ -145,12 +163,81 @@ class ShapeDrawEnv(gym.Env):
         # Create binary mask where u >= 0, v >= 0, and u + v < 1
         mask = ((u >= 0) & (v >= 0) & (u + v < 1)).float()
 
-
         log.debug(
             f"Triangle mask created with vertices {vertices} and shape {mask.shape}")
         return mask
 
-    def _normalize_triangle_coordinates(self,triangle_params:torch.Tensor) -> torch.Tensor:
+    def _create_rectangle_mask(self, x: torch.Tensor, y: torch.Tensor, w: torch.Tensor, h: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
+        """Create a binary mask of a rectangle.
+        Args:
+            x (torch.Tensor): normalized x coordinate of center [0,1]
+            y (torch.Tensor): normalized y coordinate of center [0,1]
+            w (torch.Tensor): normalized width [0,1]
+            h (torch.Tensor): normalized height [0,1]
+            a (torch.Tensor): Angle of rotation [0,1] mapped to [0, 360] degrees
+        Returns:
+            torch.Tensor: (size, size) rectangle mask
+        """
+
+        # scale coordinates
+        center_x, center_y, width, height, angle = self._normalize_rectangle_coordinates(
+            x, y, w, h, a)
+
+        # coordinate grid
+        y_coords, x_coords = self.MESHGRID
+        # Convert angle to radians
+        theta = torch.deg2rad(angle)
+
+        cos_theta = torch.cos(theta)
+        sin_theta = torch.sin(theta)
+
+        # Shift grid to rectangle center
+        x_shifted = x_coords - center_x
+        y_shifted = y_coords - center_y
+
+        # Rotate grid in opposite direction (important!)
+        x_rot = x_shifted * cos_theta + y_shifted * sin_theta
+        y_rot = -x_shifted * sin_theta + y_shifted * cos_theta
+
+        # Check inside axis-aligned rectangle
+        mask = (
+            (x_rot.abs() <= width / 2) &
+            (y_rot.abs() <= height / 2)
+        ).float()
+
+        log.debug(
+            f"Rectangle mask created with center ({center_x}, {center_y}), width {width}, height {height}, and shape {mask.shape}")
+        return mask
+
+    def _normalize_rectangle_coordinates(self, x: torch.Tensor, y: torch.Tensor, w: torch.Tensor, h: torch.Tensor, a: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Normalize rectangle parameters from [0,1] to actual pixel coordinates and dimensions.
+        Args:
+            x (torch.Tensor): normalized x coordinate of center [0,1]
+            y (torch.Tensor): normalized y coordinate of center [0,1]
+            w (torch.Tensor): normalized width [0,1]
+            h (torch.Tensor): normalized height [0,1]
+            a (torch.Tensor): Angle of rotation [0,1] mapped to [0, 360] degrees
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: center_x, center_y, width, height, angle
+        """
+        size = hyperparams.IMG_SIZE
+        # we want the shapes to look good
+        extent = size * hyperparams.RECTANGLE_EXTENT
+        margin = size * hyperparams.RECTANGLE_MARGIN
+
+        center_x = x * extent + margin
+        center_y = y * extent + margin
+
+        angle = a * 360  # map [0,1] to [0,360]
+        angle= torch.tensor(angle)
+        width = max(min(w, hyperparams.RECTANGLE_MAX_SIZE),
+                    hyperparams.RECTANGLE_MIN_SIZE)*size
+        height = max(min(h, hyperparams.RECTANGLE_MAX_SIZE),
+                     hyperparams.RECTANGLE_MIN_SIZE)*size
+        return center_x, center_y, width, height, angle
+
+    def _normalize_triangle_coordinates(self, triangle_params: torch.Tensor) -> torch.Tensor:
         """Normalize triangle vertex coordinates from [0,1] to actual pixel coordinates.
         Args:
             triangle_params torch.Tensor: Tensor of vertex coordinate tensors [(x1, y1), (x2, y2), (x3, y3)]
@@ -182,8 +269,8 @@ class ShapeDrawEnv(gym.Env):
         margin = size * hyperparams.TRIANGLE_MARGIN
         # map to canvas
         vertices = torch.stack([
-            margin + vertices[:,0] * extent,
-            margin + vertices[:,1] * extent
+            margin + vertices[:, 0] * extent,
+            margin + vertices[:, 1] * extent
         ], dim=1)
 
         log.debug(f"Normalized triangle vertices: {vertices}")
