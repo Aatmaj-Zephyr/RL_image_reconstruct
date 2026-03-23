@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ShapeDraw UI</title>
+  <style>
+    body {
+      font-family: Arial;
+      display: flex;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    #toolbar {
+      width: 200px;
+    }
+
+    button {
+      width: 100%;
+      margin-bottom: 10px;
+      padding: 10px;
+      cursor: pointer;
+    }
+
+    canvas {
+      border: 1px solid black;
+    }
+
+    input {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+<div id="toolbar">
+  <h3>Shapes</h3>
+  <button onclick="setTool('circle')">Circle</button>
+  <button onclick="setTool('rectangle')">Rectangle</button>
+  <button onclick="setTool('triangle')">Triangle</button>
+
+  <h3>Params</h3>
+  Radius: <input type="range" id="radius" min="5" max="100" value="30"><br>
+  Width: <input type="range" id="width" min="10" max="150" value="60"><br>
+  Height: <input type="range" id="height" min="10" max="150" value="60"><br>
+  Rotation: <input type="range" id="rotation" min="0" max="360" value="0"><br>
+
+  <br>
+  <button onclick="clearCanvas()">Clear</button>
+  <button onclick="downloadImage()">Export Image</button>
+</div>
+
+<canvas id="canvas" width="512" height="512"></canvas>
+
+<script>
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let currentTool = "circle";
+let shapes = [];
+let isDragging = false;
+
+function setTool(tool) {
+  currentTool = tool;
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  isDragging = true;
+  addShape(e);
+});
+
+canvas.addEventListener("mousemove", (e) => {
+  if (isDragging) {
+    addShape(e);
+  }
+});
+
+canvas.addEventListener("mouseup", () => {
+  isDragging = false;
+});
+
+function getMousePos(e) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  };
+}
+
+function addShape(e) {
+  const pos = getMousePos(e);
+
+  const shape = {
+    type: currentTool,
+    x: pos.x,
+    y: pos.y,
+    radius: document.getElementById("radius").value,
+    width: document.getElementById("width").value,
+    height: document.getElementById("height").value,
+    rotation: document.getElementById("rotation").value
+  };
+
+  shapes.push(shape);
+  draw();
+}
+function fillBackground() {
+  ctx.fillStyle = "black";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  fillBackground();
+
+  shapes.forEach(shape => {
+    ctx.save();
+    ctx.translate(shape.x, shape.y);
+    ctx.rotate(shape.rotation * Math.PI / 180);
+
+    ctx.fillStyle = "white";
+
+    if (shape.type === "circle") {
+      ctx.beginPath();
+      ctx.arc(0, 0, shape.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (shape.type === "rectangle") {
+      ctx.fillRect(
+        -shape.width / 2,
+        -shape.height / 2,
+        shape.width,
+        shape.height
+      );
+    }
+
+    if (shape.type === "triangle") {
+      ctx.beginPath();
+      ctx.moveTo(0, -shape.height / 2);
+      ctx.lineTo(-shape.width / 2, shape.height / 2);
+      ctx.lineTo(shape.width / 2, shape.height / 2);
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.restore();
+  });
+}
+
+function clearCanvas() {
+  shapes = [];
+  draw();
+}
+
+function downloadImage() {
+  const link = document.createElement("a");
+  link.download = "shapes.png";
+  link.href = canvas.toDataURL();
+  link.click();
+}
+</script>
+
+</body>
+</html>
