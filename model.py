@@ -17,13 +17,13 @@ class REINFORCE(nn.Module):
             nn.GELU(),
             nn.Conv2d(16, 32, 3, padding=1, stride=2),
             nn.GELU(),
-            nn.Conv2d(32, 32, 3, padding=1, stride=2),
-            nn.GELU(),
             nn.Conv2d(32, 64, 3, padding=1, stride=2),
             nn.GELU(),
-            nn.Conv2d(64, 64, 3, padding=1, stride=2),
+            nn.Conv2d(64, 256, 3, padding=1, stride=2),
             nn.GELU(),
-            nn.Conv2d(64, 64, 3, padding=1),
+            nn.Conv2d(256, 256, 3, padding=1, stride=2),
+            nn.GELU(),
+            nn.Conv2d(256, 64, 3, padding=1),
             nn.GELU(),
             nn.Flatten()
         )

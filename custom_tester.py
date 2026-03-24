@@ -10,8 +10,8 @@ from environment import ShapeDrawEnv
 from helpers.hyperparams import hyperparams
 
 
-MODEL_PATH = "/Users/aatmaj/RL_image_reconstruct/models/model_well-hound_0400000.pth"
-IMAGE_PATH = "/Users/aatmaj/RL_image_reconstruct/custom_tests/circle_triangle_rectangle5.png"
+MODEL_PATH = "/Users/aatmaj/RL_image_reconstruct/models/model_well-hound_0700000.pth"
+IMAGE_PATH = "/Users/aatmaj/RL_image_reconstruct/custom_tests/circle_triangle_rectangle1.png"
 
 
 def load_mask(path):
