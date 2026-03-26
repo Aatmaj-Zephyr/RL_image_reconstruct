@@ -44,7 +44,8 @@ class ShapeDrawEnv(gym.Env):
             "gt_params": self.gt_params.cpu()
         }
         return self.gt_mask.cpu(), info
-
+    def set_target(self, gt_mask):
+        self.gt_mask = gt_mask
     def step(self, action: torch.Tensor) -> tuple[torch.Tensor, float, bool, bool, dict]:
         """Take an action and return the predicted mask, reward, done flag, and info."""
         pred_mask = self.create_shape_masks(action)
