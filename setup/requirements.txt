@@ -5,4 +5,7 @@ torch
 matplotlib
 numpy
 
+cma
+imageio
+
 gymnasium

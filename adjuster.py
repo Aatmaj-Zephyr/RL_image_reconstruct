@@ -1,4 +1,5 @@
 import re
+import cv2
 
 import torch
 import numpy as np
@@ -16,7 +17,7 @@ from helpers.logger import log, setup_logger, setup_worker_logger
 from helpers.telemetry_writer import telemetry_writer
 
 MODEL_PATH = "/Users/aatmaj/RL_image_reconstruct/models/model_well-hound_0700000.pth"
-IMAGE_PATH = "/Users/aatmaj/RL_image_reconstruct/custom_tests/circle_triangle_rectangle4.png"
+IMAGE_PATH = "/Users/aatmaj/RL_image_reconstruct/custom_tests/circle_triangle_rectangle1.png"
 
 
 # -----------------------------
@@ -37,7 +38,7 @@ def compute_iou(gt_mask, pred_mask):
     return (intersection / union).item()
 
 
-def render(gt_mask, pred_mask, iou):
+def render(gt_mask, pred_mask, iou,show = True):
     gt = gt_mask.cpu().numpy()
     pred = pred_mask.cpu().numpy()
     overlap = gt * pred
@@ -68,7 +69,14 @@ def render(gt_mask, pred_mask, iou):
     axes[2].axis("off")
 
     plt.tight_layout()
-    plt.show()
+    if show:
+        plt.show()
+
+    fig.canvas.draw()
+    frame = np.array(fig.canvas.renderer.buffer_rgba())
+
+    return frame
+
 
 def make_env() -> gym.Env:
     """Return a new environment. (This is a helper function to return environment object.)"""
@@ -88,6 +96,7 @@ def refine_with_cmaes(gt_mask, init_params, device):
         [make_env for _ in range(hyperparams.POP_SIZE)])
     envs.reset()
  
+    intermediate_bests = []  # to store intermediate best solutions for video 
     envs.call("set_target", gt_mask.cpu().numpy())
     x0 = init_params.detach().cpu().numpy()
 
@@ -96,7 +105,6 @@ def refine_with_cmaes(gt_mask, init_params, device):
         hyperparams.CMA_SIGMA,  # adjust
         {'popsize': hyperparams.POP_SIZE}
     )
-
 
     step = 0
     while True:
@@ -117,7 +125,7 @@ def refine_with_cmaes(gt_mask, init_params, device):
 
         if step % 5 == 0:
             print(f"[CMA step {step}] best IoU: {best_iou:.4f}")
-
+            intermediate_bests.append((step, best_iou, es.result.xbest.copy()))
         if step >= hyperparams.MIN_CMA_STEPS and best_iou > hyperparams.CMA_REWARD_SATISFACTION_THRESHOLD:
             print(f"Early stop at step {step} with IoU: {best_iou:.4f}")
             break
@@ -130,9 +138,34 @@ def refine_with_cmaes(gt_mask, init_params, device):
         dtype=torch.float32
     ).to(device)
 
-    return best
+    return best,intermediate_bests
 
+def video_save(frames, path, fps):
+    if not frames:
+        print("No frames to save.")
+        return
 
+    height, width, _ = frames[0].shape
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    video = cv2.VideoWriter(path, fourcc, fps, (width, height))
+
+    for frame in frames:
+        frame_bgr = cv2.cvtColor(frame[:, :, :3], cv2.COLOR_RGB2BGR)
+        video.write(frame_bgr)
+
+    video.release()
+
+def video_maker(intermediate_bests, gt_mask, env, device):
+    """Make video from intermediate best solutions."""
+    frames = []
+    for step, iou, params in intermediate_bests:
+        pred_mask = env.create_shape_masks(params).to(device)
+        frame = render(gt_mask.cpu(), pred_mask.cpu(), iou, show=False)
+        frames.append(frame)
+
+    path = "cmaes_refinement.mp4"
+    fps = 5
+    video_save(frames, path, fps)
 # -----------------------------
 # Main
 # -----------------------------
@@ -183,12 +216,12 @@ def main():
     init_iou = compute_iou(gt_mask, init_mask)
 
     print(f"Initial IoU: {init_iou:.4f}")
-    render(gt_mask.cpu(), init_mask.cpu(), init_iou)
+    _= render(gt_mask.cpu(), init_mask.cpu(), init_iou)
 
     # -----------------------------
     # Step 2: CMA-ES refinement
     # -----------------------------
-    refined_params = refine_with_cmaes(
+    refined_params, intermediate_bests = refine_with_cmaes(
         gt_mask,
         init_params,
         device
@@ -202,7 +235,9 @@ def main():
 
     print(f"Final IoU after CMA-ES: {final_iou:.4f}")
 
-    render(gt_mask.cpu(), final_mask.cpu(), final_iou)
+    _=render(gt_mask.cpu(), final_mask.cpu(), final_iou)
+    
+    video_maker(intermediate_bests, gt_mask, env, device)
 
 
 if __name__ == "__main__":
