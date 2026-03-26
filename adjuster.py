@@ -5,18 +5,18 @@ import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
 import cma
-
+import gymnasium as gym
 from model import REINFORCE
 from environment import ShapeDrawEnv
 from helpers.hyperparams import hyperparams
 import os
 import argparse
 from helpers.config import config, load_config
-from helpers.logger import log, setup_logger
+from helpers.logger import log, setup_logger, setup_worker_logger
 from helpers.telemetry_writer import telemetry_writer
 
 MODEL_PATH = "/Users/aatmaj/RL_image_reconstruct/models/model_well-hound_0700000.pth"
-IMAGE_PATH = "/Users/aatmaj/RL_image_reconstruct/custom_tests/circle_triangle_rectangle1.png"
+IMAGE_PATH = "/Users/aatmaj/RL_image_reconstruct/custom_tests/circle_triangle_rectangle4.png"
 
 
 # -----------------------------
@@ -70,22 +70,31 @@ def render(gt_mask, pred_mask, iou):
     plt.tight_layout()
     plt.show()
 
-
+def make_env() -> gym.Env:
+    """Return a new environment. (This is a helper function to return environment object.)"""
+    run_id = os.environ.get("RL_RUN_ID")
+    if run_id:
+        level = os.environ.get("RL_LOG_LEVEL", "INFO")
+        setup_worker_logger(run_id=run_id, level=level)
+    return ShapeDrawEnv()
 # -----------------------------
 # CMA-ES Optimization
 # -----------------------------
-def refine_with_cmaes(env, gt_mask, init_params, device, min_steps,
-                     max_steps, sigma, popsize):
+def refine_with_cmaes(gt_mask, init_params, device):
     """
     CMA-ES optimization loop
     """
-
+    envs = gym.vector.AsyncVectorEnv(
+        [make_env for _ in range(hyperparams.POP_SIZE)])
+    envs.reset()
+ 
+    envs.call("set_target", gt_mask.cpu().numpy())
     x0 = init_params.detach().cpu().numpy()
 
     es = cma.CMAEvolutionStrategy(
         x0,
-        sigma,
-        {'popsize': popsize}
+        hyperparams.CMA_SIGMA,  # adjust
+        {'popsize': hyperparams.POP_SIZE}
     )
 
 
@@ -95,23 +104,26 @@ def refine_with_cmaes(env, gt_mask, init_params, device, min_steps,
         solutions = es.ask()
         rewards = []
 
-        for s in solutions:
-            s_tensor = torch.tensor(s, dtype=torch.float32)
+        # Convert to numpy batch
+        actions = np.stack(solutions).astype(np.float32)
 
-            pred_mask = env.create_shape_masks(s_tensor).to(device)
-            iou = compute_iou(gt_mask, pred_mask)
+        # Step all envs in parallel
+        _, rewards, _, _, _ = envs.step(actions)
 
-            rewards.append(-iou)  # minimize
+        rewards = -rewards  # CMA minimizes
 
         es.tell(solutions, rewards)
-        if step>=min_steps and -min(rewards) > 0.99:  # early stop if IoU is very good
-            print(f"Early stop at step {step} with IoU: {-min(rewards):.4f}")
-            break
-        if step>=max_steps:
-            break
+        best_iou = -min(rewards)
+
         if step % 5 == 0:
-            print(f"[CMA step {step}] best IoU: {-min(rewards):.4f}")
-        
+            print(f"[CMA step {step}] best IoU: {best_iou:.4f}")
+
+        if step >= hyperparams.MIN_CMA_STEPS and best_iou > hyperparams.CMA_REWARD_SATISFACTION_THRESHOLD:
+            print(f"Early stop at step {step} with IoU: {best_iou:.4f}")
+            break
+
+        if step >= hyperparams.MAX_CMA_STEPS:
+            break
 
     best = torch.tensor(
         es.result.xbest,
@@ -177,14 +189,9 @@ def main():
     # Step 2: CMA-ES refinement
     # -----------------------------
     refined_params = refine_with_cmaes(
-        env,
         gt_mask,
         init_params,
-        device,
-        min_steps = 100,    # adjust
-        max_steps=1000,     # adjust
-        sigma=0.1,    # adjust
-        popsize=16    # adjust
+        device
     )
 
     # -----------------------------
